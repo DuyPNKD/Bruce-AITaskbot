@@ -126,8 +126,13 @@ async function sendTelegramMessage(chatId, text, parseMode = null) {
     console.log(`📤 Đang gửi tin nhắn tới chat ${chatId}, độ dài: ${text.length} ký tự`);
     const payload = { chat_id: chatId, text };
     if (parseMode) payload.parse_mode = parseMode;
-    await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, payload);
-    console.log(`✅ Đã gửi thành công tới chat ${chatId}`);
+    try {
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, payload);
+        console.log(`✅ Đã gửi thành công tới chat ${chatId}`);
+    } catch (err) {
+        console.error(`❌ Gửi thất bại tới chat ${chatId}:`, err.response?.data || err.message);
+        throw err;
+    }
 }
 
 async function setTelegramWebhook() {
@@ -413,6 +418,22 @@ const TOOLS = [
                 required: ["indexes"]
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "trigger_morning_report",
+            description: "Chay bao cao buoi sang (giong bao cao tu dong 8h): gui danh sach task cua tung thanh vien. Dung khi user yeu cau xem/thu bao cao sang.",
+            parameters: { type: "object", properties: {}, required: [] }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "trigger_afternoon_report",
+            description: "Chay bao cao buoi chieu (giong bao cao tu dong 16h30): gui nhac deadline + qua han. Dung khi user yeu cau xem/thu bao cao chieu.",
+            parameters: { type: "object", properties: {}, required: [] }
+        }
     }
 
 ];
@@ -517,6 +538,14 @@ async function executeTool(toolName, toolInput, chatId) {
                 const [upcoming, overdue] = await Promise.all([getUpcomingDeadlineTasks(toolInput.days_ahead || 2), getOverdueTasks()]);
                 return `QUA HAN:\n${groupTasksByUser(overdue, true)}\n\nSAP TOI:\n${groupTasksByUser(upcoming, true)}`;
             }
+            case "trigger_morning_report": {
+                await sendTaskReport(chatId);
+                return "DA GUI BAO CAO SANG. KHONG can noi lai noi dung. Chi xac nhan ngan gon.";
+            }
+            case "trigger_afternoon_report": {
+                await sendDeadlineReminder(chatId);
+                return "DA GUI BAO CAO CHIEU. KHONG can noi lai noi dung. Chi xac nhan ngan gon.";
+            }
             case "get_summary": {
                 const allTasks = await getAllTasks({ statuses: ["to do", "in progress", "complete"] });
                 return `Tong: ${allTasks.length} task.`;
@@ -552,7 +581,10 @@ MÔI TRƯỜNG:
 - Ví dụ: "@phamduy1203: Thảo nay mang cơm không?" và "@pthao1401: không ăn nè" là 2 người KHÁC NHAU đang nói chuyện với nhau, KHÔNG phải cùng một người.
 - Em phải đọc tên người gửi trước dấu ":" để biết ai đang nói gì, từ đó hiểu đúng ngữ cảnh cuộc trò chuyện.
 - Mọi tin nhắn trong lịch sử đều là thông tin công khai trong nhóm, em được phép đọc, tóm tắt, phân tích thoải mái.
-- Các báo cáo tự động (gửi lúc 8h sáng, nhắc deadline) cũng được lưu trong lịch sử để em nắm bối cảnh.
+- Em có lịch báo cáo tự động mỗi ngày:
+  + 8h00 sáng: Gửi lời chào buổi sáng + báo cáo danh sách task của từng thành viên.
+  + 16h30 chiều: Nhắc deadline các task sắp hết hạn/quá hạn + nhắc mọi người update tiến độ cuối ngày.
+- Các báo cáo tự động cũng được lưu trong lịch sử để em nắm bối cảnh.
 
 KHẢ NĂNG NHÌN HÌNH ẢNH (VISION):
 - Em CÓ KHẢ NĂNG xem và phân tích hình ảnh được gửi trong nhóm.
@@ -587,7 +619,14 @@ Anh cần hỗ trợ gì thêm không ạ?
 
 QUY TẮC BẮT BUỘC KHI HỎI DANH SÁCH TASK:
 - KHI user hỏi "danh sách task", "xem task", "task của mọi người", "task của nhóm" hoặc bất kỳ yêu cầu nào liên quan đến xem task → em PHẢI GỌI TOOL get_tasks, TUYỆT ĐỐI KHÔNG dùng lịch sử hội thoại để tự trả lời.
-- KHI tool get_tasks trả về "Da gui danh sach task cho tung nguoi." → em chỉ được trả lời XÁC NHẬN NGẮN GỌN kiểu "Đã gửi danh sách task của từng người rồi anh ơi! Anh cần hỗ trợ gì thêm không ạ?" — TUYỆT ĐỐI KHÔNG liệt kê lại task trong tin nhắn trả lời này.`;
+- KHI tool get_tasks trả về "Da gui danh sach task cho tung nguoi." → em chỉ được trả lời XÁC NHẬN NGẮN GỌN kiểu "Đã gửi danh sách task của từng người rồi anh ơi! Anh cần hỗ trợ gì thêm không ạ?" — TUYỆT ĐỐI KHÔNG liệt kê lại task trong tin nhắn trả lời này.
+
+QUY TẮC KHI USER YÊU CẦU XEM BÁO CÁO:
+- Khi user yêu cầu "thử báo cáo", "báo cáo buổi sáng", "báo cáo sáng", "xem báo cáo sáng" → em PHẢI GỌI TOOL trigger_morning_report.
+- Khi user yêu cầu "báo cáo buổi chiều", "báo cáo chiều", "xem báo cáo chiều", "nhắc deadline" → em PHẢI GỌI TOOL trigger_afternoon_report.
+- Khi user yêu cầu "báo cáo cả ngày", "báo cáo sáng chiều", "xem cả hai báo cáo" → em PHẢI GỌI trigger_morning_report trước, rồi trigger_afternoon_report sau.
+- TUYỆT ĐỐI KHÔNG dùng get_tasks hay get_deadline_alerts khi user yêu cầu xem/thử báo cáo. Phải dùng trigger_morning_report hoặc trigger_afternoon_report.
+- TUYỆT ĐỐI KHÔNG chỉ mô tả lịch báo cáo mà không gọi tool. Khi user muốn "xem", "thử", "test" báo cáo thì phải CHẠY THẬT.`;
 
 async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
     if (userMessage || fileId) {
@@ -596,14 +635,24 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
 
     const history = getHistory(chatId);
 
-    // Lọc bỏ tool message mồ côi (không có assistant tool_calls đi kèm trước đó)
+    // Lọc bỏ tool message mồ côi (cả 2 chiều)
     const assistantToolCallIds = new Set(
         history
             .filter(h => h.role === "assistant" && h.tool_calls?.length)
             .flatMap(h => h.tool_calls.map(tc => tc.id))
     );
+    const toolResponseIds = new Set(
+        history
+            .filter(h => h.role === "tool" && h.tool_call_id)
+            .map(h => h.tool_call_id)
+    );
     const cleanHistory = history.filter(h => {
+        // Lọc tool response không có assistant tool_calls đi kèm
         if (h.role === "tool") return assistantToolCallIds.has(h.tool_call_id);
+        // Lọc assistant tool_calls mà thiếu tool response
+        if (h.role === "assistant" && h.tool_calls?.length) {
+            return h.tool_calls.every(tc => toolResponseIds.has(tc.id));
+        }
         return true;
     });
 
@@ -697,8 +746,12 @@ async function sendDeadlineReminder(chatId) {
 }
 
 function scheduleJobs() {
-    const isProduction = process.env.NODE_ENV === "production";
-    const reportChats  = isProduction ? ["-3419391985"] : ["-5123210368"];
+    const reportChatId = process.env.REPORT_CHAT_ID;
+    if (!reportChatId) {
+        console.log("⚠️ Chưa cấu hình REPORT_CHAT_ID, bỏ qua scheduled jobs.");
+        return;
+    }
+    const reportChats = [reportChatId];
 
     // Báo cáo task + nhắc nhở buổi sáng lúc 8h (giờ VN)
     schedule.scheduleJob({ hour: 8, minute: 0, tz: "Asia/Ho_Chi_Minh" }, async () => {
@@ -745,10 +798,44 @@ app.post("/webhook", async (req, res) => {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
+app.post("/test-report", async (req, res) => {
+    const chatId = process.env.REPORT_CHAT_ID || req.body?.chat_id;
+    if (!chatId) return res.status(400).json({ ok: false, message: "Chưa cấu hình REPORT_CHAT_ID" });
+    const type = req.body?.type || "morning";
+    try {
+        if (type === "morning") {
+            await sendTelegramMessage(chatId, "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪");
+            await sendTaskReport(chatId);
+            res.json({ ok: true, message: "Đã gửi báo cáo sáng" });
+        } else if (type === "afternoon") {
+            await sendDeadlineReminder(chatId);
+            await sendTelegramMessage(chatId, "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅");
+            res.json({ ok: true, message: "Đã gửi nhắc nhở chiều" });
+        } else {
+            res.status(400).json({ ok: false, message: "type phải là 'morning' hoặc 'afternoon'" });
+        }
+    } catch (err) {
+        console.error("Test report error:", err.response?.data || err.message);
+        res.status(500).json({ ok: false, message: err.response?.data?.description || err.message });
+    }
+});
+
+app.post("/clear-conversations", (req, res) => {
+    conversations = {};
+    saveConversations();
+    console.log("🧹 Conversations cleared via API");
+    res.json({ ok: true, message: "Conversations cleared" });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`🤖 Bot running on port ${PORT}`);
     conversations = loadConversations();
+    if (process.env.CLEAR_CONVERSATIONS_ON_START === "true") {
+        conversations = {};
+        saveConversations();
+        console.log("🧹 Conversations cleared on startup");
+    }
     const savedIds = loadSavedGroupChatIds();
     savedIds.forEach((id) => { if (!groupChatIds.includes(id)) groupChatIds.push(id); });
     try { await setTelegramWebhook(); } catch (e) { console.error("setWebhook error:", e.message); }

@@ -4,7 +4,7 @@ docker build -t aitask-bot .
 docker save -o aitask-bot.tar aitask-bot
 scp -i C:\Users\Admin\my-gcp-key aitask-bot.tar dev-duy@34.28.169.52:~/
 
-
+đăng nhập vào server công ty: ssh -i C:\Users\Admin\my-gcp-key dev-duy@34.28.169.52
 Server
 docker load -i aitask-bot.tar
 docker stop aitask-bot && docker rm aitask-bot
