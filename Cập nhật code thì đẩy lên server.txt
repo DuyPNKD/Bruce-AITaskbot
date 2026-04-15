@@ -1,0 +1,31 @@
+Local:
+cmd
+cd E:\ShopQR\AITask-bot
+# 1. Build image mới từ code hiện tại
+docker build -t aitask-bot .
+
+# 2. Export image thành file
+docker save -o aitask-bot.tar aitask-bot
+
+# 3. Copy file lên server
+scp -i C:\Users\Admin\my-gcp-key aitask-bot.tar dev-duy@34.28.169.52:~/
+
+
+
+Server: Đăng nhập vào server ssh -i C:\Users\Admin\my-gcp-key dev-duy@34.28.169.52
+bash
+# 4. Load image mới (ghi đè lên image cũ)
+docker load -i aitask-bot.tar
+
+# 5. Dừng và xóa container cũ
+docker stop aitask-bot
+docker rm aitask-bot
+
+# 6. Chạy container mới
+docker run -d --name aitask-bot -p 3000:3000 --env-file .env --restart always aitask-bot
+
+# 7. Kiểm tra log
+docker logs aitask-bot --tail 20
+
+# 8. Kiểm tra log real time
+docker logs -f aitask-bot 
