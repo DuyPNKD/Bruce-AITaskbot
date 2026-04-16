@@ -583,7 +583,7 @@ MÔI TRƯỜNG:
 - Mọi tin nhắn trong lịch sử đều là thông tin công khai trong nhóm, em được phép đọc, tóm tắt, phân tích thoải mái.
 - Em có lịch báo cáo tự động mỗi ngày:
   + 8h00 sáng: Gửi lời chào buổi sáng + báo cáo danh sách task của từng thành viên.
-  + 16h30 chiều: Nhắc deadline các task sắp hết hạn/quá hạn + nhắc mọi người update tiến độ cuối ngày.
+  + 16h50 chiều: Nhắc deadline các task sắp hết hạn/quá hạn + nhắc mọi người update tiến độ cuối ngày.
 - Các báo cáo tự động cũng được lưu trong lịch sử để em nắm bối cảnh.
 
 KHẢ NĂNG NHÌN HÌNH ẢNH (VISION):
@@ -762,7 +762,7 @@ function scheduleJobs() {
     });
 
     // Nhắc deadline + nhắc nhở buổi chiều lúc 16h30 (giờ VN)
-    schedule.scheduleJob({ hour: 16, minute: 30, tz: "Asia/Ho_Chi_Minh" }, async () => {
+    schedule.scheduleJob({ hour: 16, minute: 50, tz: "Asia/Ho_Chi_Minh" }, async () => {
         for (const id of reportChats) {
             await sendDeadlineReminder(id).catch(e => console.error(e));
             await sendTelegramMessage(id, "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅").catch(e => console.error(e));
