@@ -1,4 +1,4 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const schedule = require("node-schedule");
@@ -590,19 +590,54 @@ async function executeTool(toolName, toolInput, chatId) {
             }
             case "get_summary": {
                 const allTasks = await getAllTasks({statuses: ["to do", "in progress"]});
+                const mappedAssigneeIds = Object.values(userMapping);
+
                 if (toolInput.assignee_username) {
                     const cuId = userMapping[toolInput.assignee_username.trim().toLowerCase()];
-                    const count = cuId ? allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId))).length : 0;
-                    return `@${toolInput.assignee_username}: ${count} task`;
+                    if (!cuId) return `@${toolInput.assignee_username}: 0 task`;
+                    
+                    let soloCount = 0;
+                    let sharedCount = 0;
+                    for (const t of allTasks) {
+                        const hasUser = t.assignees?.some(a => Number(a.id) === Number(cuId));
+                        if (!hasUser) continue;
+                        const groupAssignees = t.assignees?.filter(a => mappedAssigneeIds.includes(Number(a.id))) || [];
+                        if (groupAssignees.length > 1) sharedCount++;
+                        else soloCount++;
+                    }
+                    if (sharedCount > 0) return `@${toolInput.assignee_username}: ${soloCount + sharedCount} task (${soloCount} làm riêng, ${sharedCount} làm chung)`;
+                    return `@${toolInput.assignee_username}: ${soloCount} task`;
                 }
+
+                let sharedTasks = [];
+                let unassignedTasks = [];
+                const soloCounts = {};
+                for (const tgUser of Object.keys(userMapping)) soloCounts[tgUser] = 0;
+
+                for (const t of allTasks) {
+                    const groupAssignees = t.assignees?.filter(a => mappedAssigneeIds.includes(Number(a.id))) || [];
+                    if (groupAssignees.length === 0) {
+                        unassignedTasks.push(t);
+                    } else if (groupAssignees.length > 1) {
+                        sharedTasks.push(t);
+                    } else {
+                        const cuIdNumber = Number(groupAssignees[0].id);
+                        const tgUser = Object.keys(userMapping).find(k => Number(userMapping[k]) === cuIdNumber);
+                        if (tgUser) soloCounts[tgUser]++;
+                    }
+                }
+
                 const lines = [];
-                let total = 0;
-                for (const [tgUser, cuId] of Object.entries(userMapping)) {
-                    const count = allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId))).length;
-                    lines.push(`@${tgUser}: ${count} task`);
-                    total += count;
+                for (const tgUser of Object.keys(userMapping)) {
+                    lines.push(`@${tgUser}: ${soloCounts[tgUser]} task`);
                 }
-                return `Tong: ${allTasks.length} task\n${lines.join("\n")}`;
+                if (sharedTasks.length > 0) {
+                    lines.push(`Task chung (nhiều người cùng làm): ${sharedTasks.length} task`);
+                }
+                if (unassignedTasks.length > 0) {
+                    lines.push(`Khác (chưa assign hoặc người ngoài): ${unassignedTasks.length} task`);
+                }
+                return `Tổng (trên ClickUp): ${allTasks.length} task\n${lines.join("\n")}`;
             }
             case "complete_tasks_by_index": {
                 const list = lastTaskList[String(chatId)] || [];
