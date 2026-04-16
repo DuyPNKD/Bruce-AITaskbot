@@ -416,11 +416,11 @@ const TOOLS = [
         type: "function",
         function: {
             name: "get_summary",
-            description: "Tom tat tong quan cong viec.",
+            description: "Dem so luong task cua tung thanh vien hoac tong so task. Dung khi user hoi 'bao nhieu task', 'tong task', 'so luong task'. KHONG dung get_tasks cho cau hoi dem so luong.",
             parameters: {
                 type: "object",
                 properties: {
-                    assignee_username: {type: "string"},
+                    assignee_username: {type: "string", description: "Username cua nguoi can dem. Bo trong de dem tat ca."},
                 },
             },
         },
@@ -589,8 +589,20 @@ async function executeTool(toolName, toolInput, chatId) {
                 return "DA GUI BAO CAO CHIEU. KHONG can noi lai noi dung. Chi xac nhan ngan gon.";
             }
             case "get_summary": {
-                const allTasks = await getAllTasks({statuses: ["to do", "in progress", "complete"]});
-                return `Tong: ${allTasks.length} task.`;
+                const allTasks = await getAllTasks({statuses: ["to do", "in progress"]});
+                if (toolInput.assignee_username) {
+                    const cuId = userMapping[toolInput.assignee_username.trim().toLowerCase()];
+                    const count = cuId ? allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId))).length : 0;
+                    return `@${toolInput.assignee_username}: ${count} task`;
+                }
+                const lines = [];
+                let total = 0;
+                for (const [tgUser, cuId] of Object.entries(userMapping)) {
+                    const count = allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId))).length;
+                    lines.push(`@${tgUser}: ${count} task`);
+                    total += count;
+                }
+                return `Tong: ${allTasks.length} task\n${lines.join("\n")}`;
             }
             case "complete_tasks_by_index": {
                 const list = lastTaskList[String(chatId)] || [];
@@ -659,6 +671,10 @@ QUY TẮC HIỂN THỊ DANH SÁCH TASK:
 2. Tên task khác - https://app.clickup.com/t/def456
 
 Anh cần hỗ trợ gì thêm không ạ?
+
+QUY TẮC KHI HỎI SỐ LƯỢNG TASK:
+- Khi user hỏi "bao nhiêu task", "tổng task", "số lượng task", "đếm task" → em PHẢI GỌI TOOL get_summary, KHÔNG được gọi get_tasks.
+- get_tasks chỉ dùng khi user muốn XEM DANH SÁCH chi tiết, KHÔNG dùng để đếm số lượng.
 
 QUY TẮC BẮT BUỘC KHI HỎI DANH SÁCH TASK:
 - KHI user hỏi "danh sách task", "xem task", "task của mọi người", "task của nhóm" hoặc bất kỳ yêu cầu nào liên quan đến xem task → em PHẢI GỌI TOOL get_tasks, TUYỆT ĐỐI KHÔNG dùng lịch sử hội thoại để tự trả lời.
