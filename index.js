@@ -4,7 +4,7 @@ const axios = require("axios");
 const schedule = require("node-schedule");
 const fs = require("fs");
 const path = require("path");
-const { OpenAI } = require("openai");
+const {OpenAI} = require("openai");
 
 process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
 process.on("unhandledRejection", (err) => console.error("Unhandled Rejection:", err));
@@ -16,40 +16,39 @@ console.log("🚀 Bot đang khởi động...");
 console.log("📅 Thời gian:", new Date().toLocaleString("vi-VN"));
 
 // ENV
-const BOT_TOKEN         = process.env.BOT_TOKEN;
-const BOT_USERNAME      = process.env.BOT_USERNAME || "BruceShark12_bot";
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const BOT_USERNAME = process.env.BOT_USERNAME || "BruceShark12_bot";
 const CLICKUP_API_TOKEN = process.env.CLICKUP_API_TOKEN;
-const CLICKUP_LIST_ID   = process.env.CLICKUP_LIST_ID;
+const CLICKUP_LIST_ID = process.env.CLICKUP_LIST_ID;
 const CLICKUP_DEFAULT_STATUS = process.env.CLICKUP_DEFAULT_STATUS || "to do";
-const WEBHOOK_URL       = process.env.WEBHOOK_URL;
-const GROUP_CHAT_IDS    = process.env.GROUP_CHAT_IDS;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const GROUP_CHAT_IDS = process.env.GROUP_CHAT_IDS;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GROUP_CHAT_ID_FILE = path.join(__dirname, ".group-chat-id.json");
-const CONVERSATION_FILE  = path.join(__dirname, ".conversations.json");
+const CONVERSATION_FILE = path.join(__dirname, ".conversations.json");
 
 // OPENAI CLIENT
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const openai = new OpenAI({apiKey: OPENAI_API_KEY});
 
 // USER MAPPING
 const userMapping = {
-    phamduy1203:      113449043,
-    duydemons:    107434135,
+    phamduy1203: 113449043,
+    duydemons: 107434135,
     phuong251204: 113427941,
-    ngotuankk:    95605324,
-    pthao1401:    101420424,
+    ngotuankk: 95605324,
+    pthao1401: 101420424,
 };
 
-const reverseUserMapping = Object.fromEntries(
-    Object.entries(userMapping).map(([tg, cu]) => [cu, tg])
-);
+const reverseUserMapping = Object.fromEntries(Object.entries(userMapping).map(([tg, cu]) => [cu, tg]));
 
 // GROUP CHAT IDS
 let groupChatIds = [];
 if (GROUP_CHAT_IDS) {
-    groupChatIds = GROUP_CHAT_IDS.split(',').map(id => id.trim()).filter(Boolean);
+    groupChatIds = GROUP_CHAT_IDS.split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
 }
-
 
 // Thêm biến này ở đầu file
 const lastTaskList = {}; // { chatId: [{ index: 1, taskId, taskName }, ...] }
@@ -59,21 +58,26 @@ function loadSavedGroupChatIds() {
         if (!fs.existsSync(GROUP_CHAT_ID_FILE)) return [];
         const data = JSON.parse(fs.readFileSync(GROUP_CHAT_ID_FILE, "utf8"));
         return data.groupChatIds || (data.groupChatId ? [data.groupChatId] : []);
-    } catch { return []; }
+    } catch {
+        return [];
+    }
 }
 
 function saveGroupChatIds() {
-    try { fs.writeFileSync(GROUP_CHAT_ID_FILE, JSON.stringify({ groupChatIds }, null, 2)); }
-    catch (err) { console.error("Khong luu group chat ids:", err?.message); }
+    try {
+        fs.writeFileSync(GROUP_CHAT_ID_FILE, JSON.stringify({groupChatIds}, null, 2));
+    } catch (err) {
+        console.error("Khong luu group chat ids:", err?.message);
+    }
 }
 
 function rememberGroupChatId(message) {
     const chat = message?.chat;
     if (!chat || (chat.type !== "group" && chat.type !== "supergroup")) return;
     const chatId = String(chat.id);
-    if (!groupChatIds.includes(chatId)) { 
-        groupChatIds.push(chatId); 
-        saveGroupChatIds(); 
+    if (!groupChatIds.includes(chatId)) {
+        groupChatIds.push(chatId);
+        saveGroupChatIds();
     }
 }
 
@@ -84,12 +88,17 @@ function loadConversations() {
     try {
         if (!fs.existsSync(CONVERSATION_FILE)) return {};
         return JSON.parse(fs.readFileSync(CONVERSATION_FILE, "utf8")) || {};
-    } catch { return {}; }
+    } catch {
+        return {};
+    }
 }
 
 function saveConversations() {
-    try { fs.writeFileSync(CONVERSATION_FILE, JSON.stringify(conversations, null, 2)); }
-    catch (err) { console.error("Khong luu conversations:", err?.message); }
+    try {
+        fs.writeFileSync(CONVERSATION_FILE, JSON.stringify(conversations, null, 2));
+    } catch (err) {
+        console.error("Khong luu conversations:", err?.message);
+    }
 }
 
 function getHistory(chatId) {
@@ -99,7 +108,7 @@ function getHistory(chatId) {
 
 function addToHistory(chatId, role, content, tool_calls = null, tool_call_id = null, file_id = null) {
     const history = getHistory(chatId);
-    const msg = { role };
+    const msg = {role};
     if (content !== null) msg.content = content;
     if (tool_calls) msg.tool_calls = tool_calls;
     if (tool_call_id) msg.tool_call_id = tool_call_id;
@@ -124,7 +133,7 @@ async function getTelegramFileUrl(fileId) {
 // TELEGRAM
 async function sendTelegramMessage(chatId, text, parseMode = null) {
     console.log(`📤 Đang gửi tin nhắn tới chat ${chatId}, độ dài: ${text.length} ký tự`);
-    const payload = { chat_id: chatId, text };
+    const payload = {chat_id: chatId, text};
     if (parseMode) payload.parse_mode = parseMode;
     try {
         await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, payload);
@@ -136,9 +145,12 @@ async function sendTelegramMessage(chatId, text, parseMode = null) {
 }
 
 async function setTelegramWebhook() {
-    if (!WEBHOOK_URL) { console.log("Chua co WEBHOOK_URL."); return; }
+    if (!WEBHOOK_URL) {
+        console.log("Chua co WEBHOOK_URL.");
+        return;
+    }
     const fullWebhook = `${WEBHOOK_URL.replace(/\/$/, "")}/webhook`;
-    const res = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, { url: fullWebhook });
+    const res = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {url: fullWebhook});
     if (res?.data?.ok) console.log(`Webhook set: ${fullWebhook}`);
 }
 
@@ -150,22 +162,22 @@ function getSenderName(message) {
 }
 
 // CLICKUP
-const CU_HEADERS = () => ({ Authorization: CLICKUP_API_TOKEN, "Content-Type": "application/json" });
+const CU_HEADERS = () => ({Authorization: CLICKUP_API_TOKEN, "Content-Type": "application/json"});
 
 async function cuGet(url, params = {}) {
-    const res = await axios.get(url, { headers: CU_HEADERS(), params, timeout: 20000 });
+    const res = await axios.get(url, {headers: CU_HEADERS(), params, timeout: 20000});
     return res.data;
 }
 async function cuPost(url, body) {
-    const res = await axios.post(url, body, { headers: CU_HEADERS(), timeout: 20000 });
+    const res = await axios.post(url, body, {headers: CU_HEADERS(), timeout: 20000});
     return res.data;
 }
 async function cuPut(url, body) {
-    const res = await axios.put(url, body, { headers: CU_HEADERS(), timeout: 20000 });
+    const res = await axios.put(url, body, {headers: CU_HEADERS(), timeout: 20000});
     return res.data;
 }
 async function cuDelete(url) {
-    const res = await axios.delete(url, { headers: CU_HEADERS(), timeout: 20000 });
+    const res = await axios.delete(url, {headers: CU_HEADERS(), timeout: 20000});
     return res.data;
 }
 
@@ -179,11 +191,11 @@ async function getTaskById(taskId) {
     }
 }
 
-async function getAllTasks({ statuses, assignees, includeArchived = false } = {}) {
+async function getAllTasks({statuses, assignees, includeArchived = false} = {}) {
     const allFetchedTasks = [];
     let page = 0;
     while (true) {
-        const params = { archived: includeArchived, limit: 100, page };
+        const params = {archived: includeArchived, limit: 100, page};
         if (statuses?.length) params.statuses = statuses;
         if (assignees?.length) params.assignees = assignees;
         const data = await cuGet(`https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task`, params);
@@ -198,22 +210,27 @@ async function getAllTasks({ statuses, assignees, includeArchived = false } = {}
 
 function parsePriority(priorityText) {
     const map = {
-        "khẩn cấp": 1, "urgent": 1,
-        "cao": 2, "high": 2,
-        "trung bình": 3, "normal": 3, "medium": 3,
-        "thấp": 4, "low": 4
+        "khẩn cấp": 1,
+        urgent: 1,
+        cao: 2,
+        high: 2,
+        "trung bình": 3,
+        normal: 3,
+        medium: 3,
+        thấp: 4,
+        low: 4,
     };
     return map[priorityText?.toLowerCase()] || 3; // mặc định normal
 }
 
-async function createTask({ name, description, status, assignees, dueDate, priority }) {
+async function createTask({name, description, status, assignees, dueDate, priority}) {
     const payload = {
         name: name ? name.charAt(0).toUpperCase() + name.slice(1) : "",
         status: status || CLICKUP_DEFAULT_STATUS,
         description: description || "",
-        ...(assignees?.length ? { assignees } : {}),
-        ...(dueDate ? { due_date: dueDate, due_date_time: true } : {}),
-        ...(priority ? { priority: priority } : {}),
+        ...(assignees?.length ? {assignees} : {}),
+        ...(dueDate ? {due_date: dueDate, due_date_time: true} : {}),
+        ...(priority ? {priority: priority} : {}),
     };
     return cuPost(`https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task`, payload);
 }
@@ -235,13 +252,13 @@ async function findTasksByName(keyword) {
     } else if (/^[a-zA-Z0-9]+$/.test(keyword.trim())) {
         taskId = keyword.trim();
     }
-    
+
     // Nếu tìm thấy ID, gọi API trực tiếp (không qua getAllTasks)
     if (taskId) {
         const task = await getTaskById(taskId);
         if (task) return [task];
     }
-    
+
     // Fallback: tìm theo tên trong List hiện tại (giữ nguyên code cũ)
     const tasks = await getAllTasks();
     const kw = keyword.toLowerCase().trim();
@@ -250,46 +267,48 @@ async function findTasksByName(keyword) {
     if (match) {
         extractId = match[1];
     }
-    return tasks.filter(t => 
-        t.id.toLowerCase() === extractId || 
-        t.url?.toLowerCase().includes(extractId) || 
-        t.name.toLowerCase().includes(kw)
-    );
+    return tasks.filter((t) => t.id.toLowerCase() === extractId || t.url?.toLowerCase().includes(extractId) || t.name.toLowerCase().includes(kw));
 }
 
 async function getUpcomingDeadlineTasks(days = 2) {
-    const tasks = await getAllTasks({ statuses: ["to do", "in progress"] });
+    const tasks = await getAllTasks({statuses: ["to do", "in progress"]});
     const now = Date.now();
     const cutoff = now + days * 24 * 60 * 60 * 1000;
-    return tasks.filter(t => { if (!t.due_date) return false; const due = Number(t.due_date); return due > now && due <= cutoff; })
-                .sort((a, b) => Number(a.due_date) - Number(b.due_date));
+    return tasks
+        .filter((t) => {
+            if (!t.due_date) return false;
+            const due = Number(t.due_date);
+            return due > now && due <= cutoff;
+        })
+        .sort((a, b) => Number(a.due_date) - Number(b.due_date));
 }
 
 async function getOverdueTasks() {
-    const tasks = await getAllTasks({ statuses: ["to do", "in progress"] });
-    return tasks.filter(t => t.due_date && Number(t.due_date) < Date.now())
-                .sort((a, b) => Number(a.due_date) - Number(b.due_date));
+    const tasks = await getAllTasks({statuses: ["to do", "in progress"]});
+    return tasks.filter((t) => t.due_date && Number(t.due_date) < Date.now()).sort((a, b) => Number(a.due_date) - Number(b.due_date));
 }
 
 function formatTaskList(tasks, showDeadline = false) {
     if (!tasks.length) return "Khong co task nao";
     const limit = 10;
     const firstTasks = tasks.slice(0, limit);
-    let result = firstTasks.map((t, i) => {
-        let fullName = t.name.replace(/\[|\]|\*|_|`|~/g, "");
-        let dueDateInfo = "";
-        if (showDeadline && t.due_date) {
-            const date = new Date(Number(t.due_date));
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            dueDateInfo = ` (Hạn: ${hours}:${minutes} ${day}/${month}/${year})`;
-        }
-        if (t.url) return `${i + 1}. ${fullName}${dueDateInfo} - ${t.url}`;
-        return `${i + 1}. ${fullName}${dueDateInfo}`;
-    }).join("\n");
+    let result = firstTasks
+        .map((t, i) => {
+            let fullName = t.name.replace(/\[|\]|\*|_|`|~/g, "");
+            let dueDateInfo = "";
+            if (showDeadline && t.due_date) {
+                const date = new Date(Number(t.due_date));
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = date.getFullYear();
+                const hours = String(date.getHours()).padStart(2, "0");
+                const minutes = String(date.getMinutes()).padStart(2, "0");
+                dueDateInfo = ` (Hạn: ${hours}:${minutes} ${day}/${month}/${year})`;
+            }
+            if (t.url) return `${i + 1}. ${fullName}${dueDateInfo} - ${t.url}`;
+            return `${i + 1}. ${fullName}${dueDateInfo}`;
+        })
+        .join("\n");
     if (tasks.length > limit) result += `\n... và còn ${tasks.length - limit} task khác`;
     return result;
 }
@@ -298,10 +317,10 @@ function groupTasksByUser(tasks, showDeadline = false) {
     if (!tasks || !tasks.length) return "Khong co task nao";
     let pieces = [];
     for (const [tgUser, cuId] of Object.entries(userMapping)) {
-        const userTasks = tasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId)));
+        const userTasks = tasks.filter((t) => t.assignees?.some((a) => Number(a.id) === Number(cuId)));
         if (userTasks.length > 0) pieces.push(`@${tgUser}:\n${formatTaskList(userTasks, showDeadline)}`);
     }
-    const unassignedTasks = tasks.filter(t => !t.assignees?.length || !t.assignees.some(a => Object.values(userMapping).includes(Number(a.id))));
+    const unassignedTasks = tasks.filter((t) => !t.assignees?.length || !t.assignees.some((a) => Object.values(userMapping).includes(Number(a.id))));
     if (unassignedTasks.length > 0) pieces.push(`Khac:\n${formatTaskList(unassignedTasks, showDeadline)}`);
     return pieces.join("\n\n");
 }
@@ -316,16 +335,16 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    name: { type: "string", description: "Ten task" },
-                    description: { type: "string", description: "Mo ta chi tiet" },
-                    assignees: { type: "array", items: { type: "string" }, description: "Telegram usernames (khong @)" },
-                    status: { type: "string", description: "to do / in progress / complete" },
-                    due_date_str: { type: "string", description: "Deadline: DD/MM/YYYY hoac HH:mm DD/MM/YYYY hoac 'hom nay', 'ngay mai'" },
-                    priority: { type: "string", description: "Do uu tien: khan cap / urgent / cao / high / trung binh / normal / medium / thap / low" }
+                    name: {type: "string", description: "Ten task"},
+                    description: {type: "string", description: "Mo ta chi tiet"},
+                    assignees: {type: "array", items: {type: "string"}, description: "Telegram usernames (khong @)"},
+                    status: {type: "string", description: "to do / in progress / complete"},
+                    due_date_str: {type: "string", description: "Deadline: DD/MM/YYYY hoac HH:mm DD/MM/YYYY hoac 'hom nay', 'ngay mai'"},
+                    priority: {type: "string", description: "Do uu tien: khan cap / urgent / cao / high / trung binh / normal / medium / thap / low"},
                 },
-                required: ["name"]
-            }
-        }
+                required: ["name"],
+            },
+        },
     },
     {
         type: "function",
@@ -335,12 +354,12 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    assignee_usernames: { type: "array", items: { type: "string" } },
-                    statuses: { type: "array", items: { type: "string" } },
-                    show_deadline: { type: "boolean" }
-                }
-            }
-        }
+                    assignee_usernames: {type: "array", items: {type: "string"}},
+                    statuses: {type: "array", items: {type: "string"}},
+                    show_deadline: {type: "boolean"},
+                },
+            },
+        },
     },
     {
         type: "function",
@@ -350,16 +369,21 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    task_name_keyword: { type: "string", description: "Ten task hoac link hoac ID task can cap nhat" },
-                    new_name: { type: "string" },
-                    new_status: { type: "string" },
-                    new_assignees: { type: "array", items: { type: "string" }, description: "Danh sach Telegram usernames (khong @) se THAY THE toan bo nguoi phu trach hien tai. Dung khi user yeu cau: giao cho, chuyen cho, assign cho, doi nguoi phu trach." },
-                    due_date_str: { type: "string" },
-                    priority: { type: "string", description: "Do uu tien: khan cap / urgent / cao / high / trung binh / normal / medium / thap / low" }
+                    task_name_keyword: {type: "string", description: "Ten task hoac link hoac ID task can cap nhat"},
+                    new_name: {type: "string"},
+                    new_status: {type: "string"},
+                    new_assignees: {
+                        type: "array",
+                        items: {type: "string"},
+                        description:
+                            "Danh sach Telegram usernames (khong @) se THAY THE toan bo nguoi phu trach hien tai. Dung khi user yeu cau: giao cho, chuyen cho, assign cho, doi nguoi phu trach.",
+                    },
+                    due_date_str: {type: "string"},
+                    priority: {type: "string", description: "Do uu tien: khan cap / urgent / cao / high / trung binh / normal / medium / thap / low"},
                 },
-                required: ["task_name_keyword"]
-            }
-        }
+                required: ["task_name_keyword"],
+            },
+        },
     },
     {
         type: "function",
@@ -369,11 +393,11 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    task_name_keyword: { type: "string" }
+                    task_name_keyword: {type: "string"},
                 },
-                required: ["task_name_keyword"]
-            }
-        }
+                required: ["task_name_keyword"],
+            },
+        },
     },
     {
         type: "function",
@@ -383,10 +407,10 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    days_ahead: { type: "number" }
-                }
-            }
-        }
+                    days_ahead: {type: "number"},
+                },
+            },
+        },
     },
     {
         type: "function",
@@ -396,46 +420,48 @@ const TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    assignee_username: { type: "string" }
-                }
-            }
-        }
+                    assignee_username: {type: "string"},
+                },
+            },
+        },
     },
     {
         type: "function",
         function: {
             name: "complete_tasks_by_index",
-            description: "Đánh dấu hoàn thành các task theo số thứ tự trong danh sách vừa gửi. Dùng khi user nói 'xong task 1 đến 5' hoặc 'hoàn thành task 2, 3, 4'.",
+            description:
+                "Đánh dấu hoàn thành các task theo số thứ tự trong danh sách vừa gửi. Dùng khi user nói 'xong task 1 đến 5' hoặc 'hoàn thành task 2, 3, 4'.",
             parameters: {
                 type: "object",
                 properties: {
                     indexes: {
                         type: "array",
-                        items: { type: "number" },
-                        description: "Danh sách số thứ tự task cần đánh dấu complete, ví dụ [1,2,3,4,5]"
-                    }
+                        items: {type: "number"},
+                        description: "Danh sách số thứ tự task cần đánh dấu complete, ví dụ [1,2,3,4,5]",
+                    },
                 },
-                required: ["indexes"]
-            }
-        }
+                required: ["indexes"],
+            },
+        },
     },
     {
         type: "function",
         function: {
             name: "trigger_morning_report",
-            description: "Chay bao cao buoi sang (giong bao cao tu dong 8h): gui danh sach task cua tung thanh vien. Dung khi user yeu cau xem/thu bao cao sang.",
-            parameters: { type: "object", properties: {}, required: [] }
-        }
+            description:
+                "Chay bao cao buoi sang (giong bao cao tu dong 8h): gui danh sach task cua tung thanh vien. Dung khi user yeu cau xem/thu bao cao sang.",
+            parameters: {type: "object", properties: {}, required: []},
+        },
     },
     {
         type: "function",
         function: {
             name: "trigger_afternoon_report",
-            description: "Chay bao cao buoi chieu (giong bao cao tu dong 16h30): gui nhac deadline + qua han. Dung khi user yeu cau xem/thu bao cao chieu.",
-            parameters: { type: "object", properties: {}, required: [] }
-        }
-    }
-
+            description:
+                "Chay bao cao buoi chieu (giong bao cao tu dong 16h50): gui nhac deadline + qua han. Dung khi user yeu cau xem/thu bao cao chieu.",
+            parameters: {type: "object", properties: {}, required: []},
+        },
+    },
 ];
 
 function parseDueDateStr(str) {
@@ -444,25 +470,35 @@ function parseDueDateStr(str) {
     if (!isNaN(num) && num > 10000000000) return num;
     const s = str.trim().toLowerCase();
     const now = new Date();
-    let hours = -1, minutes = -1;
+    let hours = -1,
+        minutes = -1;
     const timeMatch = s.match(/(\d{1,2}):(\d{1,2})/);
-    if (timeMatch) { hours = Number(timeMatch[1]); minutes = Number(timeMatch[2]); }
+    if (timeMatch) {
+        hours = Number(timeMatch[1]);
+        minutes = Number(timeMatch[2]);
+    }
     const matchDate = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (matchDate) {
         now.setFullYear(Number(matchDate[3]), Number(matchDate[2]) - 1, Number(matchDate[1]));
-        if (hours >= 0) now.setHours(hours, minutes, 0, 0); else now.setHours(23, 59, 59, 0);
+        if (hours >= 0) now.setHours(hours, minutes, 0, 0);
+        else now.setHours(23, 59, 59, 0);
         return now.getTime();
     }
     if (s.includes("hom") || s.includes("today")) {
-        if (hours >= 0) now.setHours(hours, minutes, 0, 0); else now.setHours(23, 59, 59, 0);
+        if (hours >= 0) now.setHours(hours, minutes, 0, 0);
+        else now.setHours(23, 59, 59, 0);
         return now.getTime();
     }
     if (s.includes("mai") || s.includes("tomorrow")) {
         now.setDate(now.getDate() + 1);
-        if (hours >= 0) now.setHours(hours, minutes, 0, 0); else now.setHours(23, 59, 59, 0);
+        if (hours >= 0) now.setHours(hours, minutes, 0, 0);
+        else now.setHours(23, 59, 59, 0);
         return now.getTime();
     }
-    if (hours >= 0) { now.setHours(hours, minutes, 0, 0); return now.getTime(); }
+    if (hours >= 0) {
+        now.setHours(hours, minutes, 0, 0);
+        return now.getTime();
+    }
     const d = new Date(str);
     return isNaN(d.getTime()) ? null : d.getTime();
 }
@@ -471,10 +507,17 @@ async function executeTool(toolName, toolInput, chatId) {
     try {
         switch (toolName) {
             case "create_task": {
-                const assigneeIds = (toolInput.assignees || []).map(u => userMapping[u.trim().toLowerCase()]).filter(id => id != null);
+                const assigneeIds = (toolInput.assignees || []).map((u) => userMapping[u.trim().toLowerCase()]).filter((id) => id != null);
                 const dueDate = parseDueDateStr(toolInput.due_date_str);
                 const priority = toolInput.priority ? parsePriority(toolInput.priority) : undefined;
-                const task = await createTask({ name: toolInput.name, description: toolInput.description, status: toolInput.status, assignees: assigneeIds, dueDate, priority });
+                const task = await createTask({
+                    name: toolInput.name,
+                    description: toolInput.description,
+                    status: toolInput.status,
+                    assignees: assigneeIds,
+                    dueDate,
+                    priority,
+                });
                 return `Da tao task: ${task.name}\nLink: ${task.url}`;
             }
             case "get_tasks": {
@@ -482,13 +525,14 @@ async function executeTool(toolName, toolInput, chatId) {
                 let reqAssignees = toolInput.assignee_usernames || [];
 
                 // Luôn lấy ALL tasks, filter local để đảm bảo không bỏ sót ai
-                const allTasks = await getAllTasks({ statuses: reqStatuses });
+                const allTasks = await getAllTasks({statuses: reqStatuses});
 
                 // Nếu chỉ hỏi 1 người cụ thể → chỉ hiển thị người đó
                 // Nếu hỏi nhiều người hoặc không chỉ định → hiển thị TẤT CẢ thành viên
-                const usersToShow = (reqAssignees.length === 1 && userMapping[reqAssignees[0].trim().toLowerCase()])
-                    ? [reqAssignees[0].trim().toLowerCase()]
-                    : Object.keys(userMapping);
+                const usersToShow =
+                    reqAssignees.length === 1 && userMapping[reqAssignees[0].trim().toLowerCase()]
+                        ? [reqAssignees[0].trim().toLowerCase()]
+                        : Object.keys(userMapping);
 
                 lastTaskList[String(chatId)] = [];
                 let globalIdx = 1;
@@ -496,9 +540,9 @@ async function executeTool(toolName, toolInput, chatId) {
 
                 for (const tgUser of usersToShow) {
                     const cuId = userMapping[tgUser];
-                    const tasks = allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId)));
+                    const tasks = allTasks.filter((t) => t.assignees?.some((a) => Number(a.id) === Number(cuId)));
                     if (tasks.length) {
-                        tasks.forEach(t => lastTaskList[String(chatId)].push({ index: globalIdx++, taskId: t.id, taskName: t.name }));
+                        tasks.forEach((t) => lastTaskList[String(chatId)].push({index: globalIdx++, taskId: t.id, taskName: t.name}));
                         await sendTelegramMessage(chatId, `@${tgUser}: (${tasks.length} task)\n${formatTaskList(tasks, toolInput.show_deadline)}`);
                         summary.push(`@${tgUser}: ${tasks.length} task`);
                     } else {
@@ -519,11 +563,9 @@ async function executeTool(toolName, toolInput, chatId) {
                     updates.priority = parsePriority(toolInput.priority);
                 }
                 if (toolInput.new_assignees?.length) {
-                    const newIds = toolInput.new_assignees
-                        .map(u => userMapping[u.trim().toLowerCase()])
-                        .filter(id => id != null);
-                    const currentIds = (found[0].assignees || []).map(a => Number(a.id));
-                    updates.assignees = { add: newIds, rem: currentIds };
+                    const newIds = toolInput.new_assignees.map((u) => userMapping[u.trim().toLowerCase()]).filter((id) => id != null);
+                    const currentIds = (found[0].assignees || []).map((a) => Number(a.id));
+                    updates.assignees = {add: newIds, rem: currentIds};
                 }
                 await updateTask(found[0].id, updates);
                 return `Da cap nhat: ${found[0].name}`;
@@ -547,7 +589,7 @@ async function executeTool(toolName, toolInput, chatId) {
                 return "DA GUI BAO CAO CHIEU. KHONG can noi lai noi dung. Chi xac nhan ngan gon.";
             }
             case "get_summary": {
-                const allTasks = await getAllTasks({ statuses: ["to do", "in progress", "complete"] });
+                const allTasks = await getAllTasks({statuses: ["to do", "in progress", "complete"]});
                 return `Tong: ${allTasks.length} task.`;
             }
             case "complete_tasks_by_index": {
@@ -555,17 +597,18 @@ async function executeTool(toolName, toolInput, chatId) {
                 if (!list.length) return "Em chưa có danh sách task nào để đối chiếu anh ơi, anh hỏi em lấy danh sách trước nhé.";
 
                 const indexes = toolInput.indexes || [];
-                const matched = list.filter(t => indexes.includes(t.index));
+                const matched = list.filter((t) => indexes.includes(t.index));
                 if (!matched.length) return "Em không tìm thấy task nào với số thứ tự đó anh ơi.";
 
-                const results = await Promise.all(
-                    matched.map(t => updateTask(t.taskId, { status: "complete" }).then(() => t.taskName))
-                );
+                const results = await Promise.all(matched.map((t) => updateTask(t.taskId, {status: "complete"}).then(() => t.taskName)));
                 return `✅ Đã đánh dấu hoàn thành:\n${results.map((name, i) => `${matched[i].index}. ${name}`).join("\n")}`;
             }
-            default: return `Khong ho tro tool: ${toolName}`;
+            default:
+                return `Khong ho tro tool: ${toolName}`;
         }
-    } catch (error) { return `Loi: ${error.message}`; }
+    } catch (error) {
+        return `Loi: ${error.message}`;
+    }
 }
 
 const SYSTEM_PROMPT = `CẢNH BÁO TỐI THƯỢNG ĐẾN TỪ DEV:
@@ -637,49 +680,51 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
 
     // Lọc bỏ tool message mồ côi (cả 2 chiều)
     const assistantToolCallIds = new Set(
-        history
-            .filter(h => h.role === "assistant" && h.tool_calls?.length)
-            .flatMap(h => h.tool_calls.map(tc => tc.id))
+        history.filter((h) => h.role === "assistant" && h.tool_calls?.length).flatMap((h) => h.tool_calls.map((tc) => tc.id)),
     );
-    const toolResponseIds = new Set(
-        history
-            .filter(h => h.role === "tool" && h.tool_call_id)
-            .map(h => h.tool_call_id)
-    );
-    const cleanHistory = history.filter(h => {
+    const toolResponseIds = new Set(history.filter((h) => h.role === "tool" && h.tool_call_id).map((h) => h.tool_call_id));
+    const cleanHistory = history.filter((h) => {
         // Lọc tool response không có assistant tool_calls đi kèm
         if (h.role === "tool") return assistantToolCallIds.has(h.tool_call_id);
         // Lọc assistant tool_calls mà thiếu tool response
         if (h.role === "assistant" && h.tool_calls?.length) {
-            return h.tool_calls.every(tc => toolResponseIds.has(tc.id));
+            return h.tool_calls.every((tc) => toolResponseIds.has(tc.id));
         }
         return true;
     });
 
     const messages = [];
     for (const h of cleanHistory) {
-        const msg = { role: h.role };
-        if (h.role === "tool") { msg.tool_call_id = h.tool_call_id; msg.content = h.content; }
-        else if (h.role === "assistant" && h.tool_calls) { msg.content = null; msg.tool_calls = h.tool_calls; }
-        else {
+        const msg = {role: h.role};
+        if (h.role === "tool") {
+            msg.tool_call_id = h.tool_call_id;
+            msg.content = h.content;
+        } else if (h.role === "assistant" && h.tool_calls) {
+            msg.content = null;
+            msg.tool_calls = h.tool_calls;
+        } else {
             if (h.file_id) {
                 const url = await getTelegramFileUrl(h.file_id);
-                msg.content = [{ type: "text", text: h.content || "" }];
-                if (url) msg.content.push({ type: "image_url", image_url: { url } });
+                msg.content = [{type: "text", text: h.content || ""}];
+                if (url) msg.content.push({type: "image_url", image_url: {url}});
             } else msg.content = h.content;
         }
         messages.push(msg);
     }
 
     async function processModelResponse(currentMessages) {
-        const res = await openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "system", content: SYSTEM_PROMPT }, ...currentMessages], tools: TOOLS });
+        const res = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{role: "system", content: SYSTEM_PROMPT}, ...currentMessages],
+            tools: TOOLS,
+        });
         const respMsg = res.choices[0].message;
         if (respMsg.tool_calls?.length) {
             currentMessages.push(respMsg);
             addToHistory(chatId, "assistant", null, respMsg.tool_calls);
             for (const call of respMsg.tool_calls) {
                 const result = await executeTool(call.function.name, JSON.parse(call.function.arguments), chatId);
-                currentMessages.push({ role: "tool", tool_call_id: call.id, content: result });
+                currentMessages.push({role: "tool", tool_call_id: call.id, content: result});
                 addToHistory(chatId, "tool", result, null, call.id);
             }
             return processModelResponse(currentMessages);
@@ -694,8 +739,8 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
 
 // JOBS
 async function sendTaskReport(chatId) {
-    const allTasks = await getAllTasks({ statuses: ["to do", "in progress"] });
-    const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    const allTasks = await getAllTasks({statuses: ["to do", "in progress"]});
+    const now = new Date().toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh"});
     const header = `📋 Báo cáo task buổi sáng (${now}):`;
     addToHistory(String(chatId), "assistant", header);
 
@@ -704,10 +749,10 @@ async function sendTaskReport(chatId) {
     let globalIndex = 1;
 
     for (const [tgUser, cuId] of Object.entries(userMapping)) {
-        const tasks = allTasks.filter(t => t.assignees?.some(a => Number(a.id) === Number(cuId)));
+        const tasks = allTasks.filter((t) => t.assignees?.some((a) => Number(a.id) === Number(cuId)));
         if (tasks.length) {
-            tasks.forEach(t => {
-                lastTaskList[String(chatId)].push({ index: globalIndex++, taskId: t.id, taskName: t.name });
+            tasks.forEach((t) => {
+                lastTaskList[String(chatId)].push({index: globalIndex++, taskId: t.id, taskName: t.name});
             });
             const msg = `@${tgUser}: (${tasks.length} task)\n${formatTaskList(tasks)}`;
             await sendTelegramMessage(chatId, msg);
@@ -722,7 +767,7 @@ async function sendTaskReport(chatId) {
 
 async function sendDeadlineReminder(chatId) {
     const [upcoming, overdue] = await Promise.all([getUpcomingDeadlineTasks(2), getOverdueTasks()]);
-    const now  = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    const now = new Date().toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh"});
     const msgs = [];
 
     if (overdue.length) {
@@ -754,22 +799,28 @@ function scheduleJobs() {
     const reportChats = [reportChatId];
 
     // Báo cáo task + nhắc nhở buổi sáng lúc 8h (giờ VN)
-    schedule.scheduleJob({ hour: 8, minute: 0, tz: "Asia/Ho_Chi_Minh" }, async () => {
+    schedule.scheduleJob({hour: 8, minute: 0, tz: "Asia/Ho_Chi_Minh"}, async () => {
         for (const id of reportChats) {
-            await sendTelegramMessage(id, "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪").catch(e => console.error(e));
-            await sendTaskReport(id).catch(e => console.error(e));
+            await sendTelegramMessage(
+                id,
+                "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪",
+            ).catch((e) => console.error(e));
+            await sendTaskReport(id).catch((e) => console.error(e));
         }
     });
 
-    // Nhắc deadline + nhắc nhở buổi chiều lúc 16h30 (giờ VN)
-    schedule.scheduleJob({ hour: 16, minute: 50, tz: "Asia/Ho_Chi_Minh" }, async () => {
+    // Nhắc deadline + nhắc nhở buổi chiều lúc 16h50 (giờ VN)
+    schedule.scheduleJob({hour: 16, minute: 50, tz: "Asia/Ho_Chi_Minh"}, async () => {
         for (const id of reportChats) {
-            await sendDeadlineReminder(id).catch(e => console.error(e));
-            await sendTelegramMessage(id, "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅").catch(e => console.error(e));
+            await sendDeadlineReminder(id).catch((e) => console.error(e));
+            await sendTelegramMessage(
+                id,
+                "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅",
+            ).catch((e) => console.error(e));
         }
     });
 
-    console.log("✅ Jobs scheduled: báo cáo 8h sáng, nhắc deadline 16h30 chiều.");
+    console.log("✅ Jobs scheduled: báo cáo 8h sáng, nhắc deadline 16h50 chiều.");
 }
 
 // WEBHOOK
@@ -792,31 +843,39 @@ app.post("/webhook", async (req, res) => {
     try {
         const reply = await getAIResponse(String(chatId), cleanText, sender, fileId);
         await sendTelegramMessage(chatId, reply);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error(err);
+    }
     return res.sendStatus(200);
 });
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (req, res) => res.json({ok: true}));
 
 app.post("/test-report", async (req, res) => {
     const chatId = process.env.REPORT_CHAT_ID || req.body?.chat_id;
-    if (!chatId) return res.status(400).json({ ok: false, message: "Chưa cấu hình REPORT_CHAT_ID" });
+    if (!chatId) return res.status(400).json({ok: false, message: "Chưa cấu hình REPORT_CHAT_ID"});
     const type = req.body?.type || "morning";
     try {
         if (type === "morning") {
-            await sendTelegramMessage(chatId, "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪");
+            await sendTelegramMessage(
+                chatId,
+                "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪",
+            );
             await sendTaskReport(chatId);
-            res.json({ ok: true, message: "Đã gửi báo cáo sáng" });
+            res.json({ok: true, message: "Đã gửi báo cáo sáng"});
         } else if (type === "afternoon") {
             await sendDeadlineReminder(chatId);
-            await sendTelegramMessage(chatId, "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅");
-            res.json({ ok: true, message: "Đã gửi nhắc nhở chiều" });
+            await sendTelegramMessage(
+                chatId,
+                "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅",
+            );
+            res.json({ok: true, message: "Đã gửi nhắc nhở chiều"});
         } else {
-            res.status(400).json({ ok: false, message: "type phải là 'morning' hoặc 'afternoon'" });
+            res.status(400).json({ok: false, message: "type phải là 'morning' hoặc 'afternoon'"});
         }
     } catch (err) {
         console.error("Test report error:", err.response?.data || err.message);
-        res.status(500).json({ ok: false, message: err.response?.data?.description || err.message });
+        res.status(500).json({ok: false, message: err.response?.data?.description || err.message});
     }
 });
 
@@ -824,7 +883,7 @@ app.post("/clear-conversations", (req, res) => {
     conversations = {};
     saveConversations();
     console.log("🧹 Conversations cleared via API");
-    res.json({ ok: true, message: "Conversations cleared" });
+    res.json({ok: true, message: "Conversations cleared"});
 });
 
 const PORT = process.env.PORT || 3000;
@@ -837,19 +896,31 @@ app.listen(PORT, async () => {
         console.log("🧹 Conversations cleared on startup");
     }
     const savedIds = loadSavedGroupChatIds();
-    savedIds.forEach((id) => { if (!groupChatIds.includes(id)) groupChatIds.push(id); });
-    try { await setTelegramWebhook(); } catch (e) { console.error("setWebhook error:", e.message); }
+    savedIds.forEach((id) => {
+        if (!groupChatIds.includes(id)) groupChatIds.push(id);
+    });
+    try {
+        await setTelegramWebhook();
+    } catch (e) {
+        console.error("setWebhook error:", e.message);
+    }
     scheduleJobs();
 
     // Test local: gửi cả báo cáo sáng + nhắc deadline chiều ngay khi khởi động
     if (process.env.NODE_ENV !== "production") {
         const testChatId = "-5123210368";
         console.log("🧪 Đang chạy local → test báo cáo sáng...");
-        await sendTelegramMessage(testChatId, "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪").catch(e => console.error(e));
-        await sendTaskReport(testChatId).catch(e => console.error(e));
+        await sendTelegramMessage(
+            testChatId,
+            "🌅 Chào buổi sáng mọi người! Đừng quên update tình hình các task hôm nay nhé.\nAnh/chị nào có task mới hoặc thay đổi thì tag @BruceShark12_bot để em cập nhật lên ClickUp cho ạ 💪",
+        ).catch((e) => console.error(e));
+        await sendTaskReport(testChatId).catch((e) => console.error(e));
 
         console.log("🧪 Đang chạy local → test nhắc deadline chiều...");
-        await sendDeadlineReminder(testChatId).catch(e => console.error(e));
-        await sendTelegramMessage(testChatId, "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅").catch(e => console.error(e));
+        await sendDeadlineReminder(testChatId).catch((e) => console.error(e));
+        await sendTelegramMessage(
+            testChatId,
+            "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅",
+        ).catch((e) => console.error(e));
     }
 });
