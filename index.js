@@ -38,6 +38,7 @@ const userMapping = {
     phuong251204: 113427941,
     ngotuankk: 95605324,
     pthao1401: 101420424,
+    thtung34: 113466799
 };
 
 const reverseUserMapping = Object.fromEntries(Object.entries(userMapping).map(([tg, cu]) => [cu, tg]));
@@ -447,6 +448,25 @@ const TOOLS = [
     {
         type: "function",
         function: {
+            name: "delete_tasks_by_index",
+            description:
+                "Xóa các task theo số thứ tự trong danh sách vừa gửi. Dùng khi user nói 'xóa task 1 đến 5' hoặc 'xóa task 2, 3, 4'.",
+            parameters: {
+                type: "object",
+                properties: {
+                    indexes: {
+                        type: "array",
+                        items: {type: "number"},
+                        description: "Danh sách số thứ tự task cần xóa, ví dụ [1,2,3,4,5]",
+                    },
+                },
+                required: ["indexes"],
+            },
+        },
+    },
+    {
+        type: "function",
+        function: {
             name: "trigger_morning_report",
             description:
                 "Chay bao cao buoi sang (giong bao cao tu dong 8h): gui danh sach task cua tung thanh vien. Dung khi user yeu cau xem/thu bao cao sang.",
@@ -586,6 +606,7 @@ async function executeTool(toolName, toolInput, chatId) {
             }
             case "trigger_afternoon_report": {
                 await sendDeadlineReminder(chatId);
+                await sendTaskReport(chatId, "cuối ngày");
                 return "DA GUI BAO CAO CHIEU. KHONG can noi lai noi dung. Chi xac nhan ngan gon.";
             }
             case "get_summary": {
@@ -650,6 +671,17 @@ async function executeTool(toolName, toolInput, chatId) {
                 const results = await Promise.all(matched.map((t) => updateTask(t.taskId, {status: "complete"}).then(() => t.taskName)));
                 return `✅ Đã đánh dấu hoàn thành:\n${results.map((name, i) => `${matched[i].index}. ${name}`).join("\n")}`;
             }
+            case "delete_tasks_by_index": {
+                const list = lastTaskList[String(chatId)] || [];
+                if (!list.length) return "Em chưa có danh sách task nào để đối chiếu anh ơi, anh hỏi em lấy danh sách trước nhé.";
+
+                const indexes = toolInput.indexes || [];
+                const matched = list.filter((t) => indexes.includes(t.index));
+                if (!matched.length) return "Em không tìm thấy task nào với số thứ tự đó anh ơi.";
+
+                const results = await Promise.all(matched.map((t) => deleteTask(t.taskId).then(() => t.taskName)));
+                return `✅ Đã xóa hoàn toàn các task:\n${results.map((name, i) => `${matched[i].index}. ${name}`).join("\n")}`;
+            }
             default:
                 return `Khong ho tro tool: ${toolName}`;
         }
@@ -705,22 +737,25 @@ QUY TẮC HIỂN THỊ DANH SÁCH TASK:
 1. Tên task - https://app.clickup.com/t/abc123
 2. Tên task khác - https://app.clickup.com/t/def456
 
-Anh cần hỗ trợ gì thêm không ạ?
-
 QUY TẮC KHI HỎI SỐ LƯỢNG TASK:
 - Khi user hỏi "bao nhiêu task", "tổng task", "số lượng task", "đếm task" → em PHẢI GỌI TOOL get_summary, KHÔNG được gọi get_tasks.
 - get_tasks chỉ dùng khi user muốn XEM DANH SÁCH chi tiết, KHÔNG dùng để đếm số lượng.
 
 QUY TẮC BẮT BUỘC KHI HỎI DANH SÁCH TASK:
 - KHI user hỏi "danh sách task", "xem task", "task của mọi người", "task của nhóm" hoặc bất kỳ yêu cầu nào liên quan đến xem task → em PHẢI GỌI TOOL get_tasks, TUYỆT ĐỐI KHÔNG dùng lịch sử hội thoại để tự trả lời.
-- KHI tool get_tasks trả về "Da gui danh sach task cho tung nguoi." → em chỉ được trả lời XÁC NHẬN NGẮN GỌN kiểu "Đã gửi danh sách task của từng người rồi anh ơi! Anh cần hỗ trợ gì thêm không ạ?" — TUYỆT ĐỐI KHÔNG liệt kê lại task trong tin nhắn trả lời này.
+- KHI tool get_tasks trả về "Da gui danh sach task cho tung nguoi." → em chỉ được trả lời XÁC NHẬN NGẮN GỌN kiểu "Đã gửi danh sách task của từng người rồi anh ơi!" — TUYỆT ĐỐI KHÔNG liệt kê lại task trong tin nhắn trả lời này.
 
 QUY TẮC KHI USER YÊU CẦU XEM BÁO CÁO:
 - Khi user yêu cầu "thử báo cáo", "báo cáo buổi sáng", "báo cáo sáng", "xem báo cáo sáng" → em PHẢI GỌI TOOL trigger_morning_report.
 - Khi user yêu cầu "báo cáo buổi chiều", "báo cáo chiều", "xem báo cáo chiều", "nhắc deadline" → em PHẢI GỌI TOOL trigger_afternoon_report.
 - Khi user yêu cầu "báo cáo cả ngày", "báo cáo sáng chiều", "xem cả hai báo cáo" → em PHẢI GỌI trigger_morning_report trước, rồi trigger_afternoon_report sau.
 - TUYỆT ĐỐI KHÔNG dùng get_tasks hay get_deadline_alerts khi user yêu cầu xem/thử báo cáo. Phải dùng trigger_morning_report hoặc trigger_afternoon_report.
-- TUYỆT ĐỐI KHÔNG chỉ mô tả lịch báo cáo mà không gọi tool. Khi user muốn "xem", "thử", "test" báo cáo thì phải CHẠY THẬT.`;
+- TUYỆT ĐỐI KHÔNG chỉ mô tả lịch báo cáo mà không gọi tool. Khi user muốn "xem", "thử", "test" báo cáo thì phải CHẠY THẬT.
+
+QUY TẮC TẠO TASK TRỰC TIẾP LÀM NGAY:
+- Khi user gọi @bot, tag một hoặc nhiều người (@username) và đưa ra bất kỳ yêu cầu công việc nào (Ví dụ: "@bot @username sửa lại form này nhé...", "chạy cái này giúp em", v.v.), em MẶC ĐỊNH HIỂU ĐÓ LÀ LỆNH TẠO TASK cho người được tag. KHÔNG CẦN từ khóa "tạo task".
+- GỌI TOOL \`create_task\` NGAY LẬP TỨC với nội dung đã đọc được. TUYỆT ĐỐI KHÔNG HỎI LẠI ĐỂ XÁC NHẬN!
+- Tạo xong trả lời báo hoàn tất kèm link task. TUYỆT ĐỐI KHÔNG wrap link bằng markdown dạng [Link](url) mà phải để nguyên plain text (ví dụ: Link: https://app.clickup.com/...) để tránh lỗi hiển thị.`;
 
 async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
     if (userMessage || fileId) {
@@ -745,22 +780,40 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
     });
 
     const messages = [];
+    const addedToolCallIds = new Set();
+
     for (const h of cleanHistory) {
-        const msg = {role: h.role};
         if (h.role === "tool") {
-            msg.tool_call_id = h.tool_call_id;
-            msg.content = h.content;
-        } else if (h.role === "assistant" && h.tool_calls) {
+            if (!addedToolCallIds.has(h.tool_call_id)) {
+                messages.push({role: "tool", tool_call_id: h.tool_call_id, content: h.content});
+                addedToolCallIds.add(h.tool_call_id);
+            }
+            continue;
+        }
+
+        const msg = {role: h.role};
+        if (h.role === "assistant" && h.tool_calls) {
             msg.content = null;
             msg.tool_calls = h.tool_calls;
+            messages.push(msg);
+            
+            for (const tc of h.tool_calls) {
+                const toolMsgs = cleanHistory.filter((t) => t.role === "tool" && t.tool_call_id === tc.id);
+                for (const tm of toolMsgs) {
+                    if (!addedToolCallIds.has(tm.tool_call_id)) {
+                        messages.push({role: "tool", tool_call_id: tm.tool_call_id, content: tm.content});
+                        addedToolCallIds.add(tm.tool_call_id);
+                    }
+                }
+            }
         } else {
             if (h.file_id) {
                 const url = await getTelegramFileUrl(h.file_id);
                 msg.content = [{type: "text", text: h.content || ""}];
                 if (url) msg.content.push({type: "image_url", image_url: {url}});
             } else msg.content = h.content;
+            messages.push(msg);
         }
-        messages.push(msg);
     }
 
     async function processModelResponse(currentMessages) {
@@ -774,7 +827,13 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
             currentMessages.push(respMsg);
             addToHistory(chatId, "assistant", null, respMsg.tool_calls);
             for (const call of respMsg.tool_calls) {
-                const result = await executeTool(call.function.name, JSON.parse(call.function.arguments), chatId);
+                let toolInput = {};
+                try {
+                    toolInput = JSON.parse(call.function.arguments);
+                } catch (e) {
+                    console.error("Lỗi parse arguments:", e);
+                }
+                const result = await executeTool(call.function.name, toolInput, chatId);
                 currentMessages.push({role: "tool", tool_call_id: call.id, content: result});
                 addToHistory(chatId, "tool", result, null, call.id);
             }
@@ -789,10 +848,10 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
 }
 
 // JOBS
-async function sendTaskReport(chatId) {
+async function sendTaskReport(chatId, title = "buổi sáng") {
     const allTasks = await getAllTasks({statuses: ["to do", "in progress"]});
     const now = new Date().toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh"});
-    const header = `📋 Báo cáo task buổi sáng (${now}):`;
+    const header = `📋 Báo cáo task ${title} (${now}):`;
     addToHistory(String(chatId), "assistant", header);
 
     // Reset danh sách task cho chat này
@@ -864,6 +923,7 @@ function scheduleJobs() {
     schedule.scheduleJob({hour: 16, minute: 50, tz: "Asia/Ho_Chi_Minh"}, async () => {
         for (const id of reportChats) {
             await sendDeadlineReminder(id).catch((e) => console.error(e));
+            await sendTaskReport(id, "cuối ngày").catch((e) => console.error(e));
             await sendTelegramMessage(
                 id,
                 "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅",
