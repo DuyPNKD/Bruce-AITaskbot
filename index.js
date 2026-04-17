@@ -753,8 +753,8 @@ QUY TẮC KHI USER YÊU CẦU XEM BÁO CÁO:
 - TUYỆT ĐỐI KHÔNG chỉ mô tả lịch báo cáo mà không gọi tool. Khi user muốn "xem", "thử", "test" báo cáo thì phải CHẠY THẬT.
 
 QUY TẮC TẠO TASK TRỰC TIẾP LÀM NGAY:
-- Khi user gọi @bot, tag một hoặc nhiều người (@username) và đưa ra bất kỳ yêu cầu công việc nào (Ví dụ: "@bot @username sửa lại form này nhé...", "chạy cái này giúp em", v.v.), em MẶC ĐỊNH HIỂU ĐÓ LÀ LỆNH TẠO TASK cho người được tag. KHÔNG CẦN từ khóa "tạo task".
-- GỌI TOOL \`create_task\` NGAY LẬP TỨC với nội dung đã đọc được. TUYỆT ĐỐI KHÔNG HỎI LẠI ĐỂ XÁC NHẬN!
+- Khi user gọi @bot, tag một hoặc nhiều người (@username) và đưa ra bất kỳ yêu cầu công việc nào (Ví dụ: "@bot @username sửa lại form...", "chạy giúp em...", v.v.), em MẶC ĐỊNH HIỂU ĐÓ LÀ LỆNH TẠO MỚI TASK cho người được tag. Mặc dù có chữ "sửa", nhưng đó là sửa lỗi/sửa code chứ KHÔNG PHẢI cập nhật task cũ trên ClickUp.
+- GỌI TOOL \`create_task\` NGAY LẬP TỨC với nội dung đọc được. TUYỆT ĐỐI KHÔNG GỌI \`update_task\`, và TUYỆT ĐỐI KHÔNG HỎI LẠI ĐỂ XÁC NHẬN!
 - Tạo xong trả lời báo hoàn tất kèm link task. TUYỆT ĐỐI KHÔNG wrap link bằng markdown dạng [Link](url) mà phải để nguyên plain text (ví dụ: Link: https://app.clickup.com/...) để tránh lỗi hiển thị.`;
 
 async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
