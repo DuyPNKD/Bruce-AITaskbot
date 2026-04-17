@@ -538,7 +538,8 @@ async function executeTool(toolName, toolInput, chatId) {
                     dueDate,
                     priority,
                 });
-                return `Da tao task: ${task.name}\nLink: ${task.url}`;
+                const assigneeTags = (toolInput.assignees || []).map(u => `@${u}`).join(", ");
+                return `Da tao task: ${task.name} cho ${assigneeTags}\nLink: ${task.url}`;
             }
             case "get_tasks": {
                 const reqStatuses = ["to do", "in progress"];
@@ -743,7 +744,7 @@ QUY TẮC KHI HỎI SỐ LƯỢNG TASK:
 
 QUY TẮC BẮT BUỘC KHI HỎI DANH SÁCH TASK:
 - KHI user hỏi "danh sách task", "xem task", "task của mọi người", "task của nhóm" hoặc bất kỳ yêu cầu nào liên quan đến xem task → em PHẢI GỌI TOOL get_tasks, TUYỆT ĐỐI KHÔNG dùng lịch sử hội thoại để tự trả lời.
-- KHI tool get_tasks trả về "Da gui danh sach task cho tung nguoi." → em chỉ được trả lời XÁC NHẬN NGẮN GỌN kiểu "Đã gửi danh sách task của từng người rồi anh ơi!" — TUYỆT ĐỐI KHÔNG liệt kê lại task trong tin nhắn trả lời này.
+- KHI tool get_tasks trả về kết quả, em hãy TRẢ LỜI XÁC NHẬN RÕ RÀNG là ĐÃ GỬI DANH SÁCH TASK CHO NHỮNG AI (dựa vào danh sách tên mà tool trả về). TUYỆT ĐỐI KHÔNG liệt kê chi tiết nội dung task, chỉ cần xác nhận tên những người đã nhận được (Ví dụ: "Đã gửi danh sách task cho anh @A và anh @B rồi ạ"). Không bao giờ dùng câu chung chung như "từng người".
 
 QUY TẮC KHI USER YÊU CẦU XEM BÁO CÁO:
 - Khi user yêu cầu "thử báo cáo", "báo cáo buổi sáng", "báo cáo sáng", "xem báo cáo sáng" → em PHẢI GỌI TOOL trigger_morning_report.
@@ -755,7 +756,8 @@ QUY TẮC KHI USER YÊU CẦU XEM BÁO CÁO:
 QUY TẮC TẠO TASK TRỰC TIẾP LÀM NGAY:
 - Khi user gọi @bot, tag một hoặc nhiều người (@username) và đưa ra bất kỳ yêu cầu công việc nào (Ví dụ: "@bot @username sửa lại form...", "chạy giúp em...", v.v.), em MẶC ĐỊNH HIỂU ĐÓ LÀ LỆNH TẠO MỚI TASK cho người được tag. Mặc dù có chữ "sửa", nhưng đó là sửa lỗi/sửa code chứ KHÔNG PHẢI cập nhật task cũ trên ClickUp.
 - GỌI TOOL \`create_task\` NGAY LẬP TỨC với nội dung đọc được. TUYỆT ĐỐI KHÔNG GỌI \`update_task\`, và TUYỆT ĐỐI KHÔNG HỎI LẠI ĐỂ XÁC NHẬN!
-- Tạo xong trả lời báo hoàn tất kèm link task. TUYỆT ĐỐI KHÔNG wrap link bằng markdown dạng [Link](url) mà phải để nguyên plain text (ví dụ: Link: https://app.clickup.com/...) để tránh lỗi hiển thị.`;
+- CHÚ Ý KHI ĐẶT TÊN TASK: Phải đưa TOÀN BỘ nội dung yêu cầu chính vào làm Tên task (name), KHÔNG ĐƯỢC CẮT XÉN giữa chừng ngớ ngẩn (Ví dụ: nếu yêu cầu là "Sửa lại form không cần nhập địa chỉ, bổ sung ngành nghề", thì tên task không được chỉ ghi mỗi "Sửa lại form", mà phải bê nguyên câu vào, nội dung diễn giải thêm cho luôn vào Description).
+- Tạo xong trả lời báo hoàn tất kèm link task VÀ NÊU RÕ CÔNG VIỆC NÀY ĐANG GIAO CHO AI (dựa vào danh sách người được tag). TUYỆT ĐỐI KHÔNG wrap link bằng markdown dạng [Link](url) mà phải để nguyên plain text (ví dụ: Link: https://app.clickup.com/...) để tránh lỗi hiển thị.`;
 
 async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
     if (userMessage || fileId) {

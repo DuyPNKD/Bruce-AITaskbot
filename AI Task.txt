@@ -10,3 +10,4 @@ docker load -i aitask-bot.tar
 docker stop aitask-bot && docker rm aitask-bot
 docker run -d --name aitask-bot -p 3000:3000 --env-file .env --restart always aitask-bot
 docker logs -f aitask-bot
+
