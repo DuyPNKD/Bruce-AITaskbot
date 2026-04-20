@@ -289,6 +289,30 @@ async function getOverdueTasks() {
     return tasks.filter((t) => t.due_date && Number(t.due_date) < Date.now()).sort((a, b) => Number(a.due_date) - Number(b.due_date));
 }
 
+async function getCompletedTasksToday() {
+    let allFetchedTasks = [];
+    let page = 0;
+    while (true) {
+        const params = { include_closed: true, limit: 100, page };
+        const data = await cuGet(`https://api.clickup.com/api/v2/list/${CLICKUP_LIST_ID}/task`, params);
+        const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+        allFetchedTasks.push(...tasks);
+        if (tasks.length < 100) break;
+        if (page >= 10) break;
+        page++;
+    }
+    
+    const d = new Date();
+    d.setUTCHours(d.getUTCHours() + 7);
+    d.setUTCHours(0, 0, 0, 0);
+    const startOfDayMs = d.getTime() - 7 * 60 * 60 * 1000;
+    
+    return allFetchedTasks.filter((t) => {
+        if (!t.date_closed) return false;
+        return Number(t.date_closed) >= startOfDayMs;
+    });
+}
+
 function formatTaskList(tasks, showDeadline = false) {
     if (!tasks.length) return "Khong co task nao";
     const limit = 10;
@@ -296,6 +320,11 @@ function formatTaskList(tasks, showDeadline = false) {
     let result = firstTasks
         .map((t, i) => {
             let fullName = t.name.replace(/\[|\]|\*|_|`|~/g, "");
+            let priorityPrefix = "";
+            if (t.priority) {
+                if (t.priority.priority === "urgent") priorityPrefix = "[🔥 KHẨN CẤP] ";
+                else if (t.priority.priority === "high") priorityPrefix = "[🔴 CAO] ";
+            }
             let dueDateInfo = "";
             if (showDeadline && t.due_date) {
                 const date = new Date(Number(t.due_date));
@@ -306,8 +335,8 @@ function formatTaskList(tasks, showDeadline = false) {
                 const minutes = String(date.getMinutes()).padStart(2, "0");
                 dueDateInfo = ` (Hạn: ${hours}:${minutes} ${day}/${month}/${year})`;
             }
-            if (t.url) return `${i + 1}. ${fullName}${dueDateInfo} - ${t.url}`;
-            return `${i + 1}. ${fullName}${dueDateInfo}`;
+            if (t.url) return `${i + 1}. ${priorityPrefix}${fullName}${dueDateInfo} - ${t.url}`;
+            return `${i + 1}. ${priorityPrefix}${fullName}${dueDateInfo}`;
         })
         .join("\n");
     if (tasks.length > limit) result += `\n... và còn ${tasks.length - limit} task khác`;
@@ -351,13 +380,14 @@ const TOOLS = [
         type: "function",
         function: {
             name: "get_tasks",
-            description: "Lay danh sach tasks.",
+            description: "Lay danh sach tasks. Có thể lọc theo mức độ ưu tiên nếu user yêu cầu.",
             parameters: {
                 type: "object",
                 properties: {
                     assignee_usernames: {type: "array", items: {type: "string"}},
                     statuses: {type: "array", items: {type: "string"}},
                     show_deadline: {type: "boolean"},
+                    high_priority_only: {type: "boolean", description: "Chi lay cac task co do uu tien cao hoac khan cap. Dung khi user hoi 'task uu tien' hoac 'task quan trong'."}
                 },
             },
         },
@@ -546,7 +576,11 @@ async function executeTool(toolName, toolInput, chatId) {
                 let reqAssignees = toolInput.assignee_usernames || [];
 
                 // Luôn lấy ALL tasks, filter local để đảm bảo không bỏ sót ai
-                const allTasks = await getAllTasks({statuses: reqStatuses});
+                let allTasks = await getAllTasks({statuses: reqStatuses});
+
+                if (toolInput.high_priority_only) {
+                    allTasks = allTasks.filter(t => t.priority && (t.priority.priority === "urgent" || t.priority.priority === "high"));
+                }
 
                 // Nếu chỉ hỏi 1 người cụ thể → chỉ hiển thị người đó
                 // Nếu hỏi nhiều người hoặc không chỉ định → hiển thị TẤT CẢ thành viên
@@ -852,6 +886,12 @@ async function getAIResponse(chatId, userMessage, senderName, fileId = null) {
 // JOBS
 async function sendTaskReport(chatId, title = "buổi sáng") {
     const allTasks = await getAllTasks({statuses: ["to do", "in progress"]});
+    
+    let completedTasksToday = [];
+    if (title === "cuối ngày") {
+        completedTasksToday = await getCompletedTasksToday();
+    }
+
     const now = new Date().toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh"});
     const header = `📋 Báo cáo task ${title} (${now}):`;
     addToHistory(String(chatId), "assistant", header);
@@ -862,11 +902,32 @@ async function sendTaskReport(chatId, title = "buổi sáng") {
 
     for (const [tgUser, cuId] of Object.entries(userMapping)) {
         const tasks = allTasks.filter((t) => t.assignees?.some((a) => Number(a.id) === Number(cuId)));
-        if (tasks.length) {
-            tasks.forEach((t) => {
-                lastTaskList[String(chatId)].push({index: globalIndex++, taskId: t.id, taskName: t.name});
-            });
-            const msg = `@${tgUser}: (${tasks.length} task)\n${formatTaskList(tasks)}`;
+        let completedMsgs = [];
+        if (title === "cuối ngày") {
+            const completed = completedTasksToday.filter((t) => t.assignees?.some((a) => Number(a.id) === Number(cuId)));
+            if (completed.length > 0) {
+                completedMsgs.push(`✅ Đã hoàn thành hôm nay (${completed.length} task):\n${formatTaskList(completed)}`);
+            }
+        }
+
+        if (tasks.length > 0 || completedMsgs.length > 0) {
+            if (tasks.length > 0) {
+                tasks.forEach((t) => {
+                    lastTaskList[String(chatId)].push({index: globalIndex++, taskId: t.id, taskName: t.name});
+                });
+            }
+            
+            let msg = `@${tgUser}: (${tasks.length} task đang làm)`;
+            if (tasks.length > 0) {
+                msg += `\n${formatTaskList(tasks)}`;
+            } else {
+                msg += `\nKhông có task đang làm`;
+            }
+
+            if (completedMsgs.length > 0) {
+                msg += `\n\n${completedMsgs[0]}`;
+            }
+
             await sendTelegramMessage(chatId, msg);
             addToHistory(String(chatId), "assistant", msg);
         } else {
@@ -978,11 +1039,12 @@ app.post("/test-report", async (req, res) => {
             res.json({ok: true, message: "Đã gửi báo cáo sáng"});
         } else if (type === "afternoon") {
             await sendDeadlineReminder(chatId);
+            await sendTaskReport(chatId, "cuối ngày");
             await sendTelegramMessage(
                 chatId,
                 "🌆 Cuối ngày rồi mọi người ơi! Nhớ update lại tiến độ các task hôm nay trước khi nghỉ nhé.\nTask nào xong thì báo em để em đánh dấu complete cho ạ ✅",
             );
-            res.json({ok: true, message: "Đã gửi nhắc nhở chiều"});
+            res.json({ok: true, message: "Đã gửi báo cáo chiều"});
         } else {
             res.status(400).json({ok: false, message: "type phải là 'morning' hoặc 'afternoon'"});
         }
